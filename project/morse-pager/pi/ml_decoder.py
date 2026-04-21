@@ -76,7 +76,7 @@ def main():
     print("Model loaded.")
 
     # Per-node session states
-    sessions: dict[str, SessionState] = {}
+    sessions = {}
 
     def get_session(node_id: str) -> SessionState:
         if node_id not in sessions:

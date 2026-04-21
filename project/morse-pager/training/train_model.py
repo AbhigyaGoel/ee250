@@ -2,9 +2,11 @@
 Train a Random Forest classifier on synthetic Morse code timing data.
 
 Reads training_data.csv, trains a RandomForestClassifier, evaluates accuracy,
-and serializes the model to ../pi/model/rf_classifier.joblib.
+saves the joblib model (for laptop use), and exports a lightweight JSON
+version (for Pi — no sklearn needed).
 """
 
+import json
 import os
 
 import joblib
@@ -58,12 +60,39 @@ def main():
     for name, imp in zip(FEATURE_COLS, clf.feature_importances_):
         print(f"  {name}: {imp:.4f}")
 
-    # Save model
+    # Save joblib model (for laptop / re-export)
     model_dir = os.path.join(os.path.dirname(__file__), "..", "pi", "model")
     os.makedirs(model_dir, exist_ok=True)
-    model_path = os.path.join(model_dir, "rf_classifier.joblib")
-    joblib.dump(clf, model_path)
-    print(f"\nModel saved to {model_path}")
+    joblib_path = os.path.join(model_dir, "rf_classifier.joblib")
+    joblib.dump(clf, joblib_path)
+    print(f"\nJoblib model saved to {joblib_path}")
+
+    # Export lightweight JSON for Pi (no sklearn needed to load)
+    json_path = os.path.join(model_dir, "rf_forest.json")
+    export_rf_to_json(clf, json_path)
+    size_kb = os.path.getsize(json_path) / 1024
+    print(f"JSON model saved to {json_path} ({size_kb:.0f} KB)")
+
+
+def export_rf_to_json(clf, output_path: str):
+    """Serialize a sklearn RandomForestClassifier to JSON for rf_lite.py."""
+    trees = []
+    for estimator in clf.estimators_:
+        t = estimator.tree_
+        trees.append({
+            "children_left": t.children_left.tolist(),
+            "children_right": t.children_right.tolist(),
+            "feature": t.feature.tolist(),
+            "threshold": t.threshold.tolist(),
+            "value": t.value[:, 0, :].tolist(),
+        })
+    model_data = {
+        "n_classes": int(clf.n_classes_),
+        "classes": clf.classes_.tolist(),
+        "trees": trees,
+    }
+    with open(output_path, "w") as f:
+        json.dump(model_data, f)
 
 
 if __name__ == "__main__":

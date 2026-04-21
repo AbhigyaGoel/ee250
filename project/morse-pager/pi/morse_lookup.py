@@ -83,6 +83,6 @@ def encode_text(text: str) -> str:
     words = text.upper().split()
     encoded_words = []
     for word in words:
-        letters = [m for c in word if (m := encode_char(c))]
+        letters = [encode_char(c) for c in word if encode_char(c)]
         encoded_words.append(" ".join(letters))
     return " / ".join(encoded_words)

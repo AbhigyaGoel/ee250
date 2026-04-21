@@ -41,7 +41,7 @@ def create_mqtt_client(broker: str) -> mqtt.Client:
     return client
 
 
-def parse_serial_line(line: str) -> dict | None:
+def parse_serial_line(line):
     """Parse plain text serial line from Node A.
 
     Expected formats:
