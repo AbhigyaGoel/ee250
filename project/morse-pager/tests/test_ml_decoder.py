@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pi"))
 
 import numpy as np
 
-from ml_decoder import SessionState, LABEL_NAMES, TOPIC_ALERT
+from ml_decoder import SessionState, LABEL_NAMES, TOPIC_ALERT, MAX_MORSE_LEN, GAP_RATIO_THRESHOLD
 from rf_lite import RFLite
 
 
@@ -19,6 +19,9 @@ class TestSessionState:
         assert s.prev_duration is None
         assert s.letter_buffer == []
         assert s.message == ""
+        assert s.tap_sum == 0.0
+        assert s.tap_count == 0
+        assert s.mean_tap_duration == 0.0
 
     def test_compute_features_shape(self):
         s = SessionState()
@@ -40,11 +43,26 @@ class TestSessionState:
         assert s.running_count == 1
         assert s.running_sum == 100.0
         assert s.prev_duration == 100.0
+        assert s.tap_count == 1
+        assert s.tap_sum == 100.0
 
-        s.compute_features(200.0, 0)
-        assert s.running_count == 2
-        assert s.running_sum == 300.0
-        assert s.prev_duration == 200.0
+    def test_tap_tracking_ignores_gaps(self):
+        s = SessionState()
+        s.compute_features(100.0, 1)  # tap
+        s.compute_features(200.0, 0)  # gap
+        assert s.tap_count == 1
+        assert s.tap_sum == 100.0
+        assert s.mean_tap_duration == 100.0
+
+    def test_mean_tap_duration(self):
+        s = SessionState()
+        s.compute_features(100.0, 1)
+        s.compute_features(200.0, 1)
+        assert s.mean_tap_duration == 150.0
+        # Gap should not affect tap mean
+        s.compute_features(500.0, 0)
+        assert s.mean_tap_duration == 150.0
+        assert s.tap_count == 2
 
     def test_compute_features_normalization(self):
         s = SessionState()
@@ -123,6 +141,13 @@ class TestDecodeLogic:
                     session.letter_buffer = []
                 session.message += " "
 
+            # Buffer overflow — same as ml_decoder
+            if len(session.letter_buffer) > MAX_MORSE_LEN:
+                morse_seq = "".join(session.letter_buffer)
+                decoded_char = decode_morse_sequence(morse_seq)
+                session.message += decoded_char
+                session.letter_buffer = []
+
         return session
 
     def test_decode_sos(self):
@@ -175,8 +200,8 @@ class TestDecodeLogic:
         assert session.message == "T"
 
     def test_decode_unknown_sequence(self):
-        # 8 dots is not valid Morse
-        labels = ["dot"] * 8 + ["inter_letter_gap"]
+        # 6 dots is not valid Morse but within buffer limit
+        labels = ["dot"] * 6 + ["inter_letter_gap"]
         session = self._simulate_decode(labels)
         assert session.message == "?"
 
@@ -204,6 +229,36 @@ class TestDecodeLogic:
         session = self._simulate_decode(labels)
         assert session.message == ""
         assert session.letter_buffer == ["."]
+
+    def test_buffer_overflow_flushes(self):
+        """Buffer longer than MAX_MORSE_LEN should auto-flush."""
+        # 7 dots with only intra-letter gaps — exceeds MAX_MORSE_LEN (6)
+        labels = ["dot", "intra_letter_gap"] * 7
+        session = self._simulate_decode(labels)
+        # Should have flushed at 7 dots — "......." is not valid = "?"
+        assert "?" in session.message
+        assert len(session.letter_buffer) == 0
+
+    def test_buffer_overflow_preserves_valid_prefix(self):
+        """Even with overflow, the flush decodes whatever accumulated."""
+        # 8 dots produces a flush after 7th dot, then 1 remains
+        labels = ["dot"] * 8 + ["inter_letter_gap"]
+        session = self._simulate_decode(labels)
+        # 7 dots flushed as "?" then 1 dot flushed as "E"
+        assert session.message == "?E"
+
+    def test_gap_fallback_forces_inter_letter(self):
+        """A gap much longer than mean tap duration should force letter flush."""
+        session = SessionState()
+        # Simulate: tap 100ms, tap 100ms, then gap 300ms
+        # Mean tap = 100ms, gap = 300ms > 100 * 1.8 = 180ms → force inter-letter
+        session.compute_features(100.0, 1)
+        session.tap_sum = 100.0
+        session.tap_count = 1
+        mean = session.mean_tap_duration
+        assert mean == 100.0
+        # A gap of 300ms is > 100 * GAP_RATIO_THRESHOLD
+        assert 300.0 > mean * GAP_RATIO_THRESHOLD
 
 
 class TestModelIntegration:

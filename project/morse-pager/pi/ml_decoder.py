@@ -28,6 +28,10 @@ TOPIC_DECODED = "pager/morse/decoded/{node_id}"
 TOPIC_ALERT = "pager/alert/{node_id}"
 
 
+MAX_MORSE_LEN = 6  # Longest valid Morse sequence (e.g. "...-.." for $)
+GAP_RATIO_THRESHOLD = 1.8  # If gap > this * mean_tap_duration, force inter-letter
+
+
 class SessionState:
     """Per-node session state for feature computation and Morse decoding."""
 
@@ -37,11 +41,18 @@ class SessionState:
         self.prev_duration = None
         self.letter_buffer = []  # List of '.' and '-'
         self.message = ""
+        # Track tap durations separately for gap classification fallback
+        self.tap_sum = 0.0
+        self.tap_count = 0
 
-    def compute_features(self, duration_ms: float, is_tap: int) -> np.ndarray:
+    def compute_features(self, duration_ms, is_tap):
         """Compute the 4-feature vector for a single event."""
         self.running_count += 1
         self.running_sum += duration_ms
+
+        if is_tap:
+            self.tap_count += 1
+            self.tap_sum += duration_ms
 
         running_mean = self.running_sum / self.running_count
         norm_by_mean = duration_ms / running_mean if running_mean > 0 else 1.0
@@ -54,6 +65,12 @@ class SessionState:
         self.prev_duration = duration_ms
 
         return np.array([[duration_ms, norm_by_mean, rel_ratio, is_tap]])
+
+    @property
+    def mean_tap_duration(self):
+        if self.tap_count == 0:
+            return 0.0
+        return self.tap_sum / self.tap_count
 
 
 def parse_args():
@@ -115,6 +132,16 @@ def main():
         confidence = float(proba[label_idx])
         label_name = LABEL_NAMES[label_idx]
 
+        # Gap classification fallback: if model says intra-letter but the
+        # gap is much longer than the average tap, override to inter-letter.
+        # This catches the common case where the model can't distinguish
+        # gap types from real (noisy) human tapping.
+        if not is_tap and label_name == "intra_letter_gap":
+            mean_tap = session.mean_tap_duration
+            if mean_tap > 0 and duration_ms > mean_tap * GAP_RATIO_THRESHOLD:
+                label_name = "inter_letter_gap"
+                label_idx = 3
+
         # Decode logic
         decoded_char = None
 
@@ -139,6 +166,15 @@ def main():
             session.message += " "
             decoded_char = " "
         # intra_letter_gap: do nothing, just separates dots/dashes within a letter
+
+        # Buffer overflow protection: if buffer exceeds max valid Morse length,
+        # flush what we have so far. This prevents runaway accumulation when
+        # gap classification fails.
+        if len(session.letter_buffer) > MAX_MORSE_LEN:
+            morse_seq = "".join(session.letter_buffer)
+            decoded_char = decode_morse_sequence(morse_seq)
+            session.message += decoded_char
+            session.letter_buffer = []
 
         # Publish RGB alert to Node B
         # Green = decoding active, Red = SOS detected
