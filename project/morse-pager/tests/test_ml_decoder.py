@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pi"))
 
 import numpy as np
 
-from ml_decoder import SessionState, LABEL_NAMES, TOPIC_ALERT, MAX_MORSE_LEN, GAP_RATIO_THRESHOLD
+from ml_decoder import SessionState, LABEL_NAMES, TOPIC_ALERT, MAX_MORSE_LEN, GAP_INTER_LETTER, GAP_WORD
 from rf_lite import RFLite
 
 
@@ -247,18 +247,19 @@ class TestDecodeLogic:
         # 7 dots flushed as "?" then 1 dot flushed as "E"
         assert session.message == "?E"
 
-    def test_gap_fallback_forces_inter_letter(self):
-        """A gap much longer than mean tap duration should force letter flush."""
+    def test_gap_thresholds(self):
+        """Adaptive gap thresholds based on mean tap duration."""
         session = SessionState()
-        # Simulate: tap 100ms, tap 100ms, then gap 300ms
-        # Mean tap = 100ms, gap = 300ms > 100 * 1.8 = 180ms → force inter-letter
         session.compute_features(100.0, 1)
-        session.tap_sum = 100.0
-        session.tap_count = 1
         mean = session.mean_tap_duration
         assert mean == 100.0
-        # A gap of 300ms is > 100 * GAP_RATIO_THRESHOLD
-        assert 300.0 > mean * GAP_RATIO_THRESHOLD
+        # intra-letter: gap < 1.5 * 100 = 150ms
+        assert 120.0 < mean * GAP_INTER_LETTER
+        # inter-letter: gap >= 1.5 * 100 = 150ms but < 4.0 * 100 = 400ms
+        assert 200.0 >= mean * GAP_INTER_LETTER
+        assert 200.0 < mean * GAP_WORD
+        # word gap: gap >= 4.0 * 100 = 400ms
+        assert 500.0 >= mean * GAP_WORD
 
 
 class TestModelIntegration:

@@ -29,7 +29,12 @@ TOPIC_ALERT = "pager/alert/{node_id}"
 
 
 MAX_MORSE_LEN = 6  # Longest valid Morse sequence (e.g. "...-.." for $)
-GAP_RATIO_THRESHOLD = 1.8  # If gap > this * mean_tap_duration, force inter-letter
+
+# Adaptive gap thresholds relative to mean tap duration.
+# Standard Morse ratios are 1:3:7 (dot:dash/inter-gap:word-gap).
+# We use generous thresholds to handle noisy human tapping.
+GAP_INTER_LETTER = 1.5   # gap > this * mean_tap → inter-letter
+GAP_WORD = 4.0            # gap > this * mean_tap → word gap
 
 
 class SessionState:
@@ -126,21 +131,29 @@ def main():
         session = get_session(node_id)
         features = session.compute_features(duration_ms, is_tap)
 
-        # Predict
+        # Classification: use ML model for taps (dot vs dash),
+        # adaptive thresholds for gaps (intra vs inter vs word).
+        # The model struggles with gap classification on real human input
+        # because timing ratios are much noisier than synthetic training data.
         label_idx = clf.predict(features)[0]
         proba = clf.predict_proba(features)[0]
         confidence = float(proba[label_idx])
         label_name = LABEL_NAMES[label_idx]
 
-        # Gap classification fallback: if model says intra-letter but the
-        # gap is much longer than the average tap, override to inter-letter.
-        # This catches the common case where the model can't distinguish
-        # gap types from real (noisy) human tapping.
-        if not is_tap and label_name == "intra_letter_gap":
+        if not is_tap:
+            # Override model gap classification with adaptive thresholds
             mean_tap = session.mean_tap_duration
-            if mean_tap > 0 and duration_ms > mean_tap * GAP_RATIO_THRESHOLD:
-                label_name = "inter_letter_gap"
-                label_idx = 3
+            if mean_tap > 0:
+                if duration_ms >= mean_tap * GAP_WORD:
+                    label_name = "word_gap"
+                    label_idx = 4
+                elif duration_ms >= mean_tap * GAP_INTER_LETTER:
+                    label_name = "inter_letter_gap"
+                    label_idx = 3
+                else:
+                    label_name = "intra_letter_gap"
+                    label_idx = 2
+                confidence = 1.0  # threshold-based, deterministic
 
         # Decode logic
         decoded_char = None
