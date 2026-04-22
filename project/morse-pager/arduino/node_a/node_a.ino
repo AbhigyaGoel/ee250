@@ -1,81 +1,47 @@
-/*
- * Node A — Morse Code Sender Terminal
- *
- * Hardware: Arduino Uno R3 + capacitive touch sensor + buzzer
- * No LCD shield on this node.
- *
- * Captures tap/release timestamps from a capacitive touch sensor,
- * computes durations using micros(), and streams them over USB serial
- * as plain text lines.
- *
- * Serial output format (plain text, one per line):
- *   TAP,<duration_us>
- *   GAP,<duration_us>
- */
+const int BUTTON_PIN = 2;    // Pushbutton wired to D2, other leg to GND
+const int BUZZER_PIN = 4;
+const int BUZZER_FREQ = 800;
 
-// --- Pin Configuration ---
-const int TOUCH_PIN = 2;     // Capacitive touch sensor SIG
-const int BUZZER_PIN = 3;    // Buzzer positive lead
-const int BUZZER_FREQ = 800; // Hz
-
-// --- State ---
-bool lastTouchState = false;
+bool lastButtonState = true;  // INPUT_PULLUP: unpressed = HIGH
 unsigned long pressTime = 0;
 unsigned long releaseTime = 0;
 bool isPressed = false;
 
-// Debounce
-const unsigned long DEBOUNCE_US = 5000; // 5ms
+const unsigned long DEBOUNCE_US = 5000;
 unsigned long lastChangeTime = 0;
 
 void setup() {
     Serial.begin(115200);
     while (!Serial) { ; }
-
-    pinMode(TOUCH_PIN, INPUT);
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(BUZZER_PIN, OUTPUT);
 }
 
 void loop() {
-    bool touchState = digitalRead(TOUCH_PIN);
+    bool buttonState = !digitalRead(BUTTON_PIN);  // invert: LOW = pressed
     unsigned long now = micros();
 
-    // Debounce
-    if (touchState != lastTouchState) {
-        if (now - lastChangeTime < DEBOUNCE_US) {
-            return;
-        }
+    if (buttonState != lastButtonState) {
+        if (now - lastChangeTime < DEBOUNCE_US) return;
         lastChangeTime = now;
-        lastTouchState = touchState;
+        lastButtonState = buttonState;
     } else {
         return;
     }
 
-    if (touchState && !isPressed) {
-        // --- PRESS ---
+    if (buttonState && !isPressed) {
         isPressed = true;
         pressTime = now;
-
-        // Emit gap duration since last release
         if (releaseTime > 0) {
-            unsigned long gapDuration = pressTime - releaseTime;
             Serial.print("GAP,");
-            Serial.println(gapDuration);
+            Serial.println(pressTime - releaseTime);
         }
-
-        // Buzzer on
         tone(BUZZER_PIN, BUZZER_FREQ);
-
-    } else if (!touchState && isPressed) {
-        // --- RELEASE ---
+    } else if (!buttonState && isPressed) {
         isPressed = false;
         releaseTime = now;
-
-        unsigned long tapDuration = releaseTime - pressTime;
         Serial.print("TAP,");
-        Serial.println(tapDuration);
-
-        // Buzzer off
+        Serial.println(releaseTime - pressTime);
         noTone(BUZZER_PIN);
     }
 }
