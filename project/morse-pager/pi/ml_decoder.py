@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import time
+from collections import deque
 
 import numpy as np
 import paho.mqtt.client as mqtt
@@ -27,14 +28,9 @@ TOPIC_RAW = "pager/morse/raw/#"
 TOPIC_DECODED = "pager/morse/decoded/{node_id}"
 TOPIC_ALERT = "pager/alert/{node_id}"
 
-
-MAX_MORSE_LEN = 6  # Longest valid Morse sequence (e.g. "...-.." for $)
-
-# Adaptive gap thresholds relative to mean tap duration.
-# Standard Morse ratios are 1:3:7 (dot:dash/inter-gap:word-gap).
-# We use generous thresholds to handle noisy human tapping.
-GAP_INTER_LETTER = 1.5   # gap > this * mean_tap → inter-letter
-GAP_WORD = 4.0            # gap > this * mean_tap → word gap
+MAX_MORSE_LEN = 6   # Longest valid Morse sequence
+GAP_WINDOW = 20      # Rolling window of recent gap durations for adaptive threshold
+WORD_GAP_MULT = 3.0  # Gap > this * median_gap → word gap
 
 
 class SessionState:
@@ -44,11 +40,12 @@ class SessionState:
         self.running_sum = 0.0
         self.running_count = 0
         self.prev_duration = None
-        self.letter_buffer = []  # List of '.' and '-'
+        self.letter_buffer = []
         self.message = ""
-        # Track tap durations separately for gap classification fallback
         self.tap_sum = 0.0
         self.tap_count = 0
+        # Rolling window of recent gap durations for adaptive gap thresholds
+        self.recent_gaps = deque(maxlen=GAP_WINDOW)
 
     def compute_features(self, duration_ms, is_tap):
         """Compute the 4-feature vector for a single event."""
@@ -58,6 +55,8 @@ class SessionState:
         if is_tap:
             self.tap_count += 1
             self.tap_sum += duration_ms
+        else:
+            self.recent_gaps.append(duration_ms)
 
         running_mean = self.running_sum / self.running_count
         norm_by_mean = duration_ms / running_mean if running_mean > 0 else 1.0
@@ -77,6 +76,43 @@ class SessionState:
             return 0.0
         return self.tap_sum / self.tap_count
 
+    @property
+    def median_gap(self):
+        """Median of recent gap durations, or 0 if not enough data."""
+        if len(self.recent_gaps) < 3:
+            return 0.0
+        return float(sorted(self.recent_gaps)[len(self.recent_gaps) // 2])
+
+    def classify_gap(self, duration_ms):
+        """Classify a gap using adaptive thresholds based on recent gap history.
+
+        Compares this gap to the median of recent gaps:
+        - Below median → intra-letter (short pause within a letter)
+        - Above median → inter-letter (boundary between letters)
+        - Above WORD_GAP_MULT * median → word gap
+
+        Falls back to mean tap duration comparison if not enough gap history.
+        """
+        median = self.median_gap
+
+        if median > 0:
+            if duration_ms >= median * WORD_GAP_MULT:
+                return "word_gap", 4
+            elif duration_ms >= median:
+                return "inter_letter_gap", 3
+            else:
+                return "intra_letter_gap", 2
+
+        # Fallback: compare to mean tap duration
+        mean_tap = self.mean_tap_duration
+        if mean_tap > 0:
+            if duration_ms >= mean_tap * 4.0:
+                return "word_gap", 4
+            elif duration_ms >= mean_tap * 1.5:
+                return "inter_letter_gap", 3
+
+        return "intra_letter_gap", 2
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Pi ML Decoder")
@@ -92,15 +128,13 @@ def parse_args():
 def main():
     args = parse_args()
 
-    # Load lightweight model (no sklearn needed)
     print(f"Loading model from {args.model}...")
     clf = RFLite(args.model)
     print("Model loaded.")
 
-    # Per-node session states
     sessions = {}
 
-    def get_session(node_id: str) -> SessionState:
+    def get_session(node_id):
         if node_id not in sessions:
             sessions[node_id] = SessionState()
         return sessions[node_id]
@@ -131,29 +165,19 @@ def main():
         session = get_session(node_id)
         features = session.compute_features(duration_ms, is_tap)
 
-        # Classification: use ML model for taps (dot vs dash),
-        # adaptive thresholds for gaps (intra vs inter vs word).
-        # The model struggles with gap classification on real human input
-        # because timing ratios are much noisier than synthetic training data.
-        label_idx = clf.predict(features)[0]
-        proba = clf.predict_proba(features)[0]
-        confidence = float(proba[label_idx])
-        label_name = LABEL_NAMES[label_idx]
+        if is_tap:
+            # ML model for taps: dot vs dash
+            label_idx = clf.predict(features)[0]
+            proba = clf.predict_proba(features)[0]
+            confidence = float(proba[label_idx])
+            label_name = LABEL_NAMES[label_idx]
+        else:
+            # Adaptive thresholds for gaps: compare gap to other gaps
+            label_name, label_idx = session.classify_gap(duration_ms)
+            confidence = 1.0
 
-        if not is_tap:
-            # Override model gap classification with adaptive thresholds
-            mean_tap = session.mean_tap_duration
-            if mean_tap > 0:
-                if duration_ms >= mean_tap * GAP_WORD:
-                    label_name = "word_gap"
-                    label_idx = 4
-                elif duration_ms >= mean_tap * GAP_INTER_LETTER:
-                    label_name = "inter_letter_gap"
-                    label_idx = 3
-                else:
-                    label_name = "intra_letter_gap"
-                    label_idx = 2
-                confidence = 1.0  # threshold-based, deterministic
+        # Debug: show raw classification
+        print(f"  [{node_id}] {event_type} {duration_ms:.0f}ms -> {label_name} (buf={''.join(session.letter_buffer)})")
 
         # Decode logic
         decoded_char = None
@@ -163,14 +187,12 @@ def main():
         elif label_name == "dash":
             session.letter_buffer.append("-")
         elif label_name == "inter_letter_gap":
-            # End of letter — decode buffer
             if session.letter_buffer:
                 morse_seq = "".join(session.letter_buffer)
                 decoded_char = decode_morse_sequence(morse_seq)
                 session.message += decoded_char
                 session.letter_buffer = []
         elif label_name == "word_gap":
-            # End of word — decode buffer + add space
             if session.letter_buffer:
                 morse_seq = "".join(session.letter_buffer)
                 decoded_char = decode_morse_sequence(morse_seq)
@@ -178,11 +200,8 @@ def main():
                 session.letter_buffer = []
             session.message += " "
             decoded_char = " "
-        # intra_letter_gap: do nothing, just separates dots/dashes within a letter
 
-        # Buffer overflow protection: if buffer exceeds max valid Morse length,
-        # flush what we have so far. This prevents runaway accumulation when
-        # gap classification fails.
+        # Buffer overflow protection
         if len(session.letter_buffer) > MAX_MORSE_LEN:
             morse_seq = "".join(session.letter_buffer)
             decoded_char = decode_morse_sequence(morse_seq)
@@ -190,9 +209,7 @@ def main():
             session.letter_buffer = []
 
         # Publish RGB alert to Node B
-        # Green = decoding active, Red = SOS detected
         if label_name in ("dot", "dash"):
-            # Check for SOS: message ends with "SOS"
             is_sos = session.message.rstrip().endswith("SOS")
             rgb_cmd = {"r": 1, "g": 0, "b": 0} if is_sos else {"r": 0, "g": 1, "b": 0}
             mqtt_client.publish(
@@ -200,7 +217,7 @@ def main():
                 json.dumps(rgb_cmd),
             )
 
-        # Publish raw event with prediction
+        # Publish classified event
         event_result = {
             "node": node_id,
             "type": event_type,
@@ -214,7 +231,7 @@ def main():
             json.dumps(event_result),
         )
 
-        # Publish decoded character if we have one
+        # Publish decoded character
         if decoded_char is not None:
             decoded_result = {
                 "node": node_id,
@@ -227,7 +244,7 @@ def main():
                 TOPIC_DECODED.format(node_id=node_id),
                 json.dumps(decoded_result),
             )
-            print(f"[{node_id}] Decoded: '{decoded_char}' (conf={confidence:.3f}) | msg: {session.message}")
+            print(f"[{node_id}] >>> Decoded: '{decoded_char}' | msg: {session.message}")
 
     # MQTT setup
     mqtt_client = mqtt.Client(client_id="ml_decoder", protocol=mqtt.MQTTv311)
