@@ -8,31 +8,45 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
         body {
             font-family: 'Courier New', monospace;
             background: #0a0a0a;
             color: #e0e0e0;
             padding: 20px;
+            display: flex;
+            flex-direction: column;
         }
         h1 {
             text-align: center;
             color: #00ff88;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
             font-size: 1.6em;
+            flex-shrink: 0;
         }
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            grid-template-rows: auto auto;
+            grid-template-rows: 1fr 1fr;
             gap: 16px;
             max-width: 1400px;
             margin: 0 auto;
+            flex: 1;
+            min-height: 0;
+            width: 100%;
         }
         .panel {
             background: #1a1a1a;
             border: 1px solid #333;
             border-radius: 8px;
             padding: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
         .panel h2 {
             color: #00ff88;
@@ -40,14 +54,25 @@
             margin-bottom: 12px;
             border-bottom: 1px solid #333;
             padding-bottom: 8px;
+            flex-shrink: 0;
         }
         .panel-wide { grid-column: 1 / -1; }
 
-        #waveformChart { width: 100%; height: 200px; }
-        #confidenceChart { width: 100%; height: 200px; }
+        .chart-wrap {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+        }
+        .chart-wrap canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100% !important;
+            height: 100% !important;
+        }
 
         .message-log {
-            max-height: 300px;
+            flex: 1;
+            min-height: 0;
             overflow-y: auto;
             font-size: 0.85em;
         }
@@ -94,8 +119,9 @@
             display: flex;
             gap: 16px;
             justify-content: center;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
             font-size: 0.85em;
+            flex-shrink: 0;
         }
         .status-dot {
             display: inline-block;
@@ -112,9 +138,11 @@
             padding: 12px;
             background: #0a0a0a;
             border-radius: 4px;
-            min-height: 50px;
+            height: 50px;
+            overflow-y: auto;
             word-wrap: break-word;
             margin-bottom: 12px;
+            flex-shrink: 0;
         }
     </style>
 </head>
@@ -131,12 +159,12 @@
     <div class="grid">
         <div class="panel">
             <h2>TAP WAVEFORM</h2>
-            <canvas id="waveformChart"></canvas>
+            <div class="chart-wrap"><canvas id="waveformChart"></canvas></div>
         </div>
 
         <div class="panel">
             <h2>CONFIDENCE SCORE</h2>
-            <canvas id="confidenceChart"></canvas>
+            <div class="chart-wrap"><canvas id="confidenceChart"></canvas></div>
         </div>
 
         <div class="panel">
@@ -165,7 +193,7 @@
                 <input type="text" id="injectText" placeholder="Type message..." autocomplete="off">
                 <button onclick="injectMessage()">SEND</button>
             </div>
-            <div id="injectLog" style="margin-top: 12px; font-size: 0.8em; color: #888; max-height: 150px; overflow-y: auto;"></div>
+            <div id="injectLog" style="margin-top: 12px; font-size: 0.8em; color: #888; flex: 1; min-height: 0; overflow-y: auto;"></div>
         </div>
     </div>
 
