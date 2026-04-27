@@ -101,6 +101,7 @@ def serial_reader_a(port_path: str, baud: int, mqtt_client: mqtt.Client):
                     print(f"[A] Ignored: {line}")
                     continue
 
+                print(f"[A] Raw: {repr(line)} -> {event}")
                 topic = TOPIC_RAW.format(node_id="A")
                 mqtt_client.publish(topic, json.dumps(event))
 
