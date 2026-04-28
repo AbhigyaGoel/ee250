@@ -1,17 +1,17 @@
 /*
  * Node B — Morse Code Receiver Terminal
  *
- * Hardware: Arduino Uno R3 + 16x2 LCD shield (stacked) + buzzer + 2 LEDs
- * No buttons on this node. Receive-only.
+ * Hardware: Arduino Uno R3 + 16x2 LCD shield (stacked) + buzzer + 2 LEDs + button (unused)
+ * Receive-only.
  *
  * LCD shield occupies D4–D10 and A0.
  * Remaining free digital pins: D2, D3, D11, D12, D13.
  *
  * Receives commands from the Pi over USB serial:
- *   CHAR,<character>        — display character on LCD + blink LEDs
+ *   CHAR,<character>        — display character on LCD
  *   TONE,<morse_pattern>    — play Morse pattern on buzzer (e.g. "...", "---")
- *   MSG,<text>              — display full message on LCD line 2
  *   SOS                     — play SOS alarm (distinct warbling tone)
+ *   RESET                   — clear LCD back to "Waiting..."
  *
  * Wiring:
  *   LCD shield:  stacked (D4–D10)
@@ -106,26 +106,6 @@ void processCommand(const char* cmd) {
         lcd.print("                ");
         lcd.setCursor(0, 1);
         lcd.print("Waiting...");
-
-    } else if (strncmp(cmd, "MSG,", 4) == 0) {
-        const char* text = cmd + 4;
-        lcd.setCursor(0, 1);
-        lcd.print("                ");
-        lcd.setCursor(0, 1);
-
-        int len = strlen(text);
-        if (len > 16) {
-            lcd.print(text + len - 16);
-        } else {
-            lcd.print(text);
-        }
-
-        displayPos = 0;
-        int start = (len > 16) ? len - 16 : 0;
-        for (int i = start; i < len && displayPos < 16; i++) {
-            displayLine[displayPos++] = text[i];
-        }
-        displayLine[displayPos] = '\0';
     }
 }
 

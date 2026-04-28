@@ -13,11 +13,11 @@ Usage:
 import argparse
 import json
 import os
-import time
+
 import numpy as np
 import paho.mqtt.client as mqtt
 
-from morse_lookup import decode_morse_sequence
+from morse_lookup import decode_morse_sequence, encode_char
 from rf_lite import RFLite
 
 LABEL_NAMES = ["dot", "dash", "intra_letter_gap", "inter_letter_gap", "word_gap"]
@@ -41,17 +41,11 @@ class SessionState:
         self.prev_duration = None
         self.letter_buffer = []
         self.message = ""
-        self.tap_sum = 0.0
-        self.tap_count = 0
 
     def compute_features(self, duration_ms, is_tap):
         """Compute the 4-feature vector for a single event."""
         self.running_count += 1
         self.running_sum += duration_ms
-
-        if is_tap:
-            self.tap_count += 1
-            self.tap_sum += duration_ms
 
         running_mean = self.running_sum / self.running_count
         norm_by_mean = duration_ms / running_mean if running_mean > 0 else 1.0
@@ -64,12 +58,6 @@ class SessionState:
         self.prev_duration = duration_ms
 
         return np.array([[duration_ms, norm_by_mean, rel_ratio, is_tap]])
-
-    @property
-    def mean_tap_duration(self):
-        if self.tap_count == 0:
-            return 0.0
-        return self.tap_sum / self.tap_count
 
     def classify_gap_fallback(self, duration_ms):
         """Fixed threshold fallback for warmup period before ML stabilizes."""
@@ -185,8 +173,6 @@ def main():
 
         # Send Morse playback + SOS alert to Node B
         if decoded_char is not None and decoded_char != " " and decoded_char != "?":
-            # Look up the Morse pattern for the decoded character
-            from morse_lookup import encode_char
             pattern = encode_char(decoded_char)
             if pattern:
                 mqtt_client.publish(

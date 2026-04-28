@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pi"))
 
 import numpy as np
 
-from ml_decoder import SessionState, LABEL_NAMES, TOPIC_ALERT, MAX_MORSE_LEN, GAP_INTER_MS, GAP_WORD_MS
+from ml_decoder import SessionState, LABEL_NAMES, TOPIC_ALERT, MAX_MORSE_LEN
 from rf_lite import RFLite
 
 
@@ -19,9 +19,6 @@ class TestSessionState:
         assert s.prev_duration is None
         assert s.letter_buffer == []
         assert s.message == ""
-        assert s.tap_sum == 0.0
-        assert s.tap_count == 0
-        assert s.mean_tap_duration == 0.0
 
     def test_compute_features_shape(self):
         s = SessionState()
@@ -43,27 +40,6 @@ class TestSessionState:
         assert s.running_count == 1
         assert s.running_sum == 100.0
         assert s.prev_duration == 100.0
-        assert s.tap_count == 1
-        assert s.tap_sum == 100.0
-
-    def test_tap_tracking_ignores_gaps(self):
-        s = SessionState()
-        s.compute_features(100.0, 1)  # tap
-        s.compute_features(200.0, 0)  # gap
-        assert s.tap_count == 1
-        assert s.tap_sum == 100.0
-        assert s.mean_tap_duration == 100.0
-
-    def test_mean_tap_duration(self):
-        s = SessionState()
-        s.compute_features(100.0, 1)
-        s.compute_features(200.0, 1)
-        assert s.mean_tap_duration == 150.0
-        # Gap should not affect tap mean
-        s.compute_features(500.0, 0)
-        assert s.mean_tap_duration == 150.0
-        assert s.tap_count == 2
-
     def test_compute_features_normalization(self):
         s = SessionState()
         s.compute_features(100.0, 1)  # mean=100, norm=1.0
@@ -250,13 +226,10 @@ class TestDecodeLogic:
     def test_gap_classification_warmup_fallback(self):
         """During warmup, fixed thresholds are used for gaps."""
         session = SessionState()
-        # Intra-letter: short gap
         label, idx = session.classify_gap_fallback(200.0)
         assert label == "intra_letter_gap"
-        # Inter-letter: medium gap
         label, idx = session.classify_gap_fallback(500.0)
         assert label == "inter_letter_gap"
-        # Word gap: long gap
         label, idx = session.classify_gap_fallback(1500.0)
         assert label == "word_gap"
 

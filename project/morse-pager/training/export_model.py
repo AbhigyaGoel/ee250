@@ -7,7 +7,6 @@ import json
 import os
 
 import joblib
-import numpy as np
 
 
 def extract_tree(tree):

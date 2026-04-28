@@ -1,10 +1,10 @@
 """
 Pi Serial Bridge — reads from Arduino Node A over USB serial (plain text format),
 publishes raw tap/gap events to the MQTT broker, and relays decoded messages
-and RGB commands back to Arduino Node B over serial.
+and tone/SOS commands back to Arduino Node B over serial.
 
 Node A sends plain text: TAP,<duration_us> or GAP,<duration_us>
-Node B receives plain text: CHAR,<c> or RGB,<r>,<g>,<b> or MSG,<text>
+Node B receives plain text: CHAR,<c> or TONE,<pattern> or SOS or RESET
 
 Usage:
     python serial_bridge.py [--port-a /dev/ttyUSB0] [--port-b /dev/ttyUSB1]
@@ -122,8 +122,8 @@ def serial_reader_a(port_path: str, baud: int, mqtt_client: mqtt.Client):
 def setup_node_b_relay(mqtt_client: mqtt.Client, port_b_path: str, baud: int):
     """Set up MQTT subscriptions that relay messages to Node B over serial.
 
-    Subscribes to decoded characters and RGB alert commands, translates them
-    to plain text serial commands for Node B.
+    Subscribes to decoded characters, tone/SOS alerts, and reset commands,
+    translates them to plain text serial commands for Node B.
     """
     ser_b = {"port": None}
 

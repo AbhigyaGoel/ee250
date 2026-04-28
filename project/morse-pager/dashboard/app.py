@@ -14,14 +14,14 @@ import os
 import time
 from datetime import datetime
 
-from flask import Flask, render_template, request
+from flask import Flask, render_template
 from flask_socketio import SocketIO
 import paho.mqtt.client as mqtt
 
 # Add parent dir to path for morse_lookup
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pi"))
-from morse_lookup import encode_text
+from morse_lookup import encode_text, encode_char
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "morse-pager-dashboard"
@@ -148,7 +148,6 @@ def handle_inject(data):
     if not text or mqtt_client is None:
         return
 
-    from morse_lookup import encode_char
     morse = encode_text(text)
     node_id = data.get("node", "dashboard")
     ts = int(time.time() * 1000)
