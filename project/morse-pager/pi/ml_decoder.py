@@ -14,8 +14,6 @@ import argparse
 import json
 import os
 import time
-from collections import deque
-
 import numpy as np
 import paho.mqtt.client as mqtt
 
@@ -28,9 +26,9 @@ TOPIC_RAW = "pager/morse/raw/+"
 TOPIC_DECODED = "pager/morse/decoded/{node_id}"
 TOPIC_ALERT = "pager/alert/{node_id}"
 
-MAX_MORSE_LEN = 6   # Longest valid Morse sequence
-GAP_WINDOW = 20      # Rolling window of recent gap durations for adaptive threshold
-WORD_GAP_MULT = 3.0  # Gap > this * median_gap → word gap
+MAX_MORSE_LEN = 6       # Longest valid Morse sequence
+GAP_INTER_MS = 400.0    # Gaps >= this are inter-letter boundaries
+GAP_WORD_MS = 1200.0    # Gaps >= this are word boundaries
 
 
 class SessionState:
@@ -44,8 +42,6 @@ class SessionState:
         self.message = ""
         self.tap_sum = 0.0
         self.tap_count = 0
-        # Rolling window of recent gap durations for adaptive gap thresholds
-        self.recent_gaps = deque(maxlen=GAP_WINDOW)
 
     def compute_features(self, duration_ms, is_tap):
         """Compute the 4-feature vector for a single event."""
@@ -55,8 +51,6 @@ class SessionState:
         if is_tap:
             self.tap_count += 1
             self.tap_sum += duration_ms
-        else:
-            self.recent_gaps.append(duration_ms)
 
         running_mean = self.running_sum / self.running_count
         norm_by_mean = duration_ms / running_mean if running_mean > 0 else 1.0
@@ -76,41 +70,18 @@ class SessionState:
             return 0.0
         return self.tap_sum / self.tap_count
 
-    @property
-    def median_gap(self):
-        """Median of recent gap durations, or 0 if not enough data."""
-        if len(self.recent_gaps) < 3:
-            return 0.0
-        return float(sorted(self.recent_gaps)[len(self.recent_gaps) // 2])
-
     def classify_gap(self, duration_ms):
-        """Classify a gap using adaptive thresholds based on recent gap history.
+        """Classify a gap using fixed thresholds.
 
-        Compares this gap to the median of recent gaps:
-        - Below median → intra-letter (short pause within a letter)
-        - Above median → inter-letter (boundary between letters)
-        - Above WORD_GAP_MULT * median → word gap
-
-        Falls back to mean tap duration comparison if not enough gap history.
+        Fixed thresholds are predictable and learnable for demo:
+        - < 400ms → intra-letter (keep building the letter)
+        - 400ms–1200ms → inter-letter (flush letter)
+        - >= 1200ms → word gap (flush letter + space)
         """
-        median = self.median_gap
-
-        if median > 0:
-            if duration_ms >= median * WORD_GAP_MULT:
-                return "word_gap", 4
-            elif duration_ms >= median:
-                return "inter_letter_gap", 3
-            else:
-                return "intra_letter_gap", 2
-
-        # Fallback: compare to mean tap duration
-        mean_tap = self.mean_tap_duration
-        if mean_tap > 0:
-            if duration_ms >= mean_tap * 4.0:
-                return "word_gap", 4
-            elif duration_ms >= mean_tap * 1.5:
-                return "inter_letter_gap", 3
-
+        if duration_ms >= GAP_WORD_MS:
+            return "word_gap", 4
+        elif duration_ms >= GAP_INTER_MS:
+            return "inter_letter_gap", 3
         return "intra_letter_gap", 2
 
 

@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pi"))
 
 import numpy as np
 
-from ml_decoder import SessionState, LABEL_NAMES, TOPIC_ALERT, MAX_MORSE_LEN, GAP_WINDOW, WORD_GAP_MULT
+from ml_decoder import SessionState, LABEL_NAMES, TOPIC_ALERT, MAX_MORSE_LEN, GAP_INTER_MS, GAP_WORD_MS
 from rf_lite import RFLite
 
 
@@ -247,38 +247,24 @@ class TestDecodeLogic:
         # 7 dots flushed as "?" then 1 dot flushed as "E"
         assert session.message == "?E"
 
-    def test_gap_classification_by_median(self):
-        """Gaps above median → inter-letter, below → intra-letter."""
+    def test_gap_classification_fixed_thresholds(self):
+        """Fixed thresholds: <400ms intra, 400-1200ms inter, >=1200ms word."""
         session = SessionState()
-        # Seed with some taps
-        session.compute_features(100.0, 1)
-        session.compute_features(100.0, 1)
-        # Seed gap history: mix of short and long gaps
-        for g in [80, 90, 100, 110, 200, 250, 300]:
-            session.compute_features(float(g), 0)
-        median = session.median_gap
-        assert median > 0
-        # Short gap (below median) → intra-letter
-        label, idx = session.classify_gap(50.0)
-        assert label == "intra_letter_gap"
-        # Long gap (above median) → inter-letter
-        label, idx = session.classify_gap(median + 10)
-        assert label == "inter_letter_gap"
-        # Very long gap → word gap
-        label, idx = session.classify_gap(median * WORD_GAP_MULT + 10)
-        assert label == "word_gap"
-
-    def test_gap_classification_fallback_to_tap_mean(self):
-        """With < 3 gaps, falls back to mean tap comparison."""
-        session = SessionState()
-        session.compute_features(100.0, 1)
-        session.compute_features(100.0, 1)
-        # Only 1 gap — not enough for median
-        session.compute_features(150.0, 0)
-        assert session.median_gap == 0.0
-        # Should fall back to tap mean (100ms), 200ms > 100 * 1.5 → inter
+        # Intra-letter: short gap
         label, idx = session.classify_gap(200.0)
+        assert label == "intra_letter_gap"
+        label, idx = session.classify_gap(399.0)
+        assert label == "intra_letter_gap"
+        # Inter-letter: medium gap
+        label, idx = session.classify_gap(400.0)
         assert label == "inter_letter_gap"
+        label, idx = session.classify_gap(800.0)
+        assert label == "inter_letter_gap"
+        # Word gap: long gap
+        label, idx = session.classify_gap(1200.0)
+        assert label == "word_gap"
+        label, idx = session.classify_gap(5000.0)
+        assert label == "word_gap"
 
 
 class TestModelIntegration:
