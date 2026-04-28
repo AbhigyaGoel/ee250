@@ -120,12 +120,6 @@ def index():
     return render_template("index.html", messages=messages)
 
 
-@app.route("/api/messages")
-def api_messages():
-    messages = get_recent_messages(100)
-    return json.dumps(messages)
-
-
 @socketio.on("connect")
 def handle_connect():
     print("Dashboard client connected")
@@ -162,7 +156,7 @@ def handle_inject(data):
             continue
         message_so_far += ch
 
-        # Publish decoded character — bridge relays CHAR + MSG to Node B LCD
+        # Publish decoded character — bridge relays CHAR to Node B LCD
         mqtt_client.publish(
             f"pager/morse/decoded/{node_id}",
             json.dumps({"node": node_id, "char": ch, "confidence": 1.0,

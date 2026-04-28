@@ -105,17 +105,3 @@ class TestFlaskRoutes:
         response = self.client.get("/")
         assert b"Morse" in response.data and b"Pager" in response.data
 
-    def test_api_messages_returns_json(self):
-        response = self.client.get("/api/messages")
-        assert response.status_code == 200
-        import json
-        data = json.loads(response.data)
-        assert isinstance(data, list)
-
-    def test_api_messages_with_data(self):
-        self.app_module.save_message("A", "H", 0.99, "H")
-        response = self.client.get("/api/messages")
-        import json
-        data = json.loads(response.data)
-        assert len(data) == 1
-        assert data[0]["character"] == "H"

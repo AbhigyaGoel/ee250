@@ -20,7 +20,7 @@ NODES
 ================================================================================
 
 Node A — Arduino Uno R3 (Sender)
-  Pushbutton on D2 (INPUT_PULLUP), buzzer on D4.
+  Pushbutton on D2 (INPUT_PULLUP). Button only — no buzzer, no LEDs.
   User taps Morse code. Arduino computes tap/gap durations using micros() and
   streams them over USB serial as plain text: TAP,<us> and GAP,<us>.
 
@@ -157,7 +157,7 @@ FILE STRUCTURE
 
 morse-pager/
   arduino/
-    node_a/node_a.ino            — sender: button + buzzer, streams TAP/GAP
+    node_a/node_a.ino            — sender: button only, streams TAP/GAP
     node_b/node_b.ino            — receiver: LCD + buzzer + LEDs, plays Morse
   pi/
     serial_bridge.py             — USB serial <-> MQTT bridge
@@ -181,7 +181,7 @@ morse-pager/
     test_generate_data.py        — 13 tests: data generation + features
     test_ml_decoder.py           — 22 tests: session state, decode logic, E2E
     test_serial_bridge.py        — 15 tests: serial line parsing
-    test_dashboard.py            — 11 tests: DB + Flask routes
+    test_dashboard.py            — 9 tests: DB + Flask routes
   README.txt                     — this file
 
 ================================================================================

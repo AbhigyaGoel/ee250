@@ -62,7 +62,6 @@ VOCABULARY = [
 
 WPM_SPEEDS = [10, 15, 20, 25]
 NOISE_STD_FRACTION = 0.15
-TARGET_SAMPLES = 50000
 SESSIONS_PER_SPEED = 150  # Number of simulated sessions per WPM
 
 

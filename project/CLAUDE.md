@@ -4,8 +4,8 @@
 A Morse code pager across four physical nodes. Arduino Node A lets a user tap Morse code messages using a pushbutton. The Raspberry Pi decodes the tap stream in real time using a trained ML model and relays decoded messages to Arduino Node B, which displays them on an LCD, plays them back through a buzzer, and blinks LEDs. A laptop runs a Flask dashboard that visualizes the decoding process live.
 
 ## Nodes
-- **Node A**: Arduino Uno R3 (Sender). Pushbutton on D2 (INPUT_PULLUP), buzzer on D4. Computes tap/gap durations using `micros()` and streams them as `TAP,<us>` / `GAP,<us>` over USB serial.
-- **Node B**: Arduino Uno R3 (Receiver). 16x2 LCD shield (stacked, D4-D10), buzzer on D13, LED1 on D2, LED2 on D3. Displays decoded text on LCD, plays decoded Morse patterns through buzzer, blinks LEDs (LED1=dot, LED2=dash). SOS triggers warbling alarm. No buttons.
+- **Node A**: Arduino Uno R3 (Sender). Pushbutton on D2 (INPUT_PULLUP). Button only — no buzzer, no LEDs. Computes tap/gap durations using `micros()` and streams them as `TAP,<us>` / `GAP,<us>` over USB serial.
+- **Node B**: Arduino Uno R3 (Receiver). 16x2 LCD shield (stacked, D4-D10), buzzer on D13, LED1 on D2, LED2 on D3. Has a button (unused). Displays decoded text on LCD, plays decoded Morse patterns through buzzer, blinks LEDs (LED1=dot, LED2=dash). SOS triggers warbling alarm.
 - **Node C**: Raspberry Pi. Runs Mosquitto MQTT broker, serial bridge, and ML decoder. Python 3.7 — all Pi code must avoid 3.8+ syntax.
 - **Node D**: Laptop. Runs Flask-SocketIO dashboard with live Chart.js panels, manual inject, and reset button.
 
@@ -63,12 +63,10 @@ Random Forest classifier (100 trees, max_depth=12, class_weight="balanced").
 ## Wiring
 
 ### Node A — Arduino Uno R3 (Sender)
-No shield. All pins free.
+No shield. Button only.
 | Component | Pin |
 |-----------|-----|
 | Pushbutton (one leg to D2, other to GND) | D2 (INPUT_PULLUP) |
-| Buzzer + | D4 |
-| Buzzer - | GND |
 
 ### Node B — Arduino Uno R3 (Receiver)
 LCD shield stacked (D4-D10, A0).
