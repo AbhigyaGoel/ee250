@@ -99,6 +99,14 @@ void processCommand(const char* cmd) {
     } else if (strcmp(cmd, "SOS") == 0) {
         playSosAlarm();
 
+    } else if (strcmp(cmd, "RESET") == 0) {
+        displayPos = 0;
+        displayLine[0] = '\0';
+        lcd.setCursor(0, 1);
+        lcd.print("                ");
+        lcd.setCursor(0, 1);
+        lcd.print("Waiting...");
+
     } else if (strncmp(cmd, "MSG,", 4) == 0) {
         const char* text = cmd + 4;
         lcd.setCursor(0, 1);

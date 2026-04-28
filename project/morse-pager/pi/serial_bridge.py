@@ -184,9 +184,14 @@ def setup_node_b_relay(mqtt_client: mqtt.Client, port_b_path: str, baud: int):
                 print(f"[B] Relay: SOS")
                 write_to_b("SOS")
 
+        elif "control/reset" in topic:
+            print(f"[B] Relay: RESET")
+            write_to_b("RESET")
+
     mqtt_client.on_message = on_message
     mqtt_client.subscribe(TOPIC_DECODED)
     mqtt_client.subscribe(TOPIC_ALERT)
+    mqtt_client.subscribe("pager/control/#")
 
     # Try initial connection to Node B
     connect_b()
