@@ -1,6 +1,4 @@
 const int BUTTON_PIN = 2;    // Pushbutton wired to D2, other leg to GND
-const int BUZZER_PIN = 4;
-const int BUZZER_FREQ = 800;
 
 bool lastButtonState = true;  // INPUT_PULLUP: unpressed = HIGH
 unsigned long pressTime = 0;
@@ -14,7 +12,6 @@ void setup() {
     Serial.begin(115200);
     while (!Serial) { ; }
     pinMode(BUTTON_PIN, INPUT_PULLUP);
-    pinMode(BUZZER_PIN, OUTPUT);
 }
 
 void loop() {
@@ -36,12 +33,10 @@ void loop() {
             Serial.print("GAP,");
             Serial.println(pressTime - releaseTime);
         }
-        tone(BUZZER_PIN, BUZZER_FREQ);
     } else if (!buttonState && isPressed) {
         isPressed = false;
         releaseTime = now;
         Serial.print("TAP,");
         Serial.println(releaseTime - pressTime);
-        noTone(BUZZER_PIN);
     }
 }
