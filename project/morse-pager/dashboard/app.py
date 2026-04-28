@@ -142,23 +142,47 @@ def handle_reset():
 
 @socketio.on("inject_message")
 def handle_inject(data):
-    """Manual message inject — encode text to Morse and publish to broker."""
+    """Manual message inject — encode text to Morse, send each character
+    to the broker as decoded + tone events so Node B displays and buzzes."""
     text = data.get("text", "").strip()
     if not text or mqtt_client is None:
         return
 
+    from morse_lookup import encode_char
     morse = encode_text(text)
     node_id = data.get("node", "dashboard")
+    ts = int(time.time() * 1000)
+    message_so_far = ""
 
-    payload = {
-        "node": node_id,
-        "text": text,
-        "morse": morse,
-        "ts": int(time.time() * 1000),
-    }
-    mqtt_client.publish(f"pager/morse/inject/{node_id}", json.dumps(payload))
+    for ch in text.upper():
+        if ch == " ":
+            message_so_far += " "
+            continue
+        pattern = encode_char(ch)
+        if not pattern:
+            continue
+        message_so_far += ch
 
-    socketio.emit("inject_sent", payload)
+        # Publish decoded character — bridge relays CHAR + MSG to Node B LCD
+        mqtt_client.publish(
+            f"pager/morse/decoded/{node_id}",
+            json.dumps({"node": node_id, "char": ch, "confidence": 1.0,
+                         "message_so_far": message_so_far, "ts": ts}),
+        )
+        # Publish tone command — bridge relays TONE to Node B buzzer
+        mqtt_client.publish(
+            f"pager/alert/{node_id}",
+            json.dumps({"cmd": "tone", "pattern": pattern, "char": ch}),
+        )
+
+    # Check for SOS
+    if "SOS" in text.upper():
+        mqtt_client.publish(
+            f"pager/alert/{node_id}",
+            json.dumps({"cmd": "sos"}),
+        )
+
+    socketio.emit("inject_sent", {"node": node_id, "text": text, "morse": morse, "ts": ts})
     print(f"[inject] Sent: {text} -> {morse}")
 
 
