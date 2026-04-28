@@ -173,9 +173,6 @@ def setup_node_b_relay(mqtt_client: mqtt.Client, port_b_path: str, baud: int):
             if char:
                 print(f"[B] Relay: CHAR,{char}")
                 write_to_b(f"CHAR,{char}")
-            msg_so_far = data.get("message_so_far", "")
-            if msg_so_far:
-                write_to_b(f"MSG,{msg_so_far}")
 
         elif "alert" in topic:
             cmd = data.get("cmd", "")
