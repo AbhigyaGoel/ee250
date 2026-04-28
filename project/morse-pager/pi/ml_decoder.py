@@ -24,7 +24,7 @@ from rf_lite import RFLite
 
 LABEL_NAMES = ["dot", "dash", "intra_letter_gap", "inter_letter_gap", "word_gap"]
 
-TOPIC_RAW = "pager/morse/raw/#"
+TOPIC_RAW = "pager/morse/raw/+"
 TOPIC_DECODED = "pager/morse/decoded/{node_id}"
 TOPIC_ALERT = "pager/alert/{node_id}"
 
