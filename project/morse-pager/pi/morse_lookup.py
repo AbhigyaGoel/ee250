@@ -1,3 +1,4 @@
+# AI-assisted development (Claude Code, Anthropic)
 """
 Morse code lookup table.
 

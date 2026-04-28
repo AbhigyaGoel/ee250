@@ -1,3 +1,4 @@
+// AI-assisted development (Claude Code, Anthropic)
 /*
  * Node B — Morse Code Receiver Terminal
  *

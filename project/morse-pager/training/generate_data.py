@@ -1,3 +1,4 @@
+# AI-assisted development (Claude Code, Anthropic)
 """
 Synthetic Morse code training data generator.
 

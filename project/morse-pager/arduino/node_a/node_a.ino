@@ -1,3 +1,4 @@
+// AI-assisted development (Claude Code, Anthropic)
 const int BUTTON_PIN = 2;    // Pushbutton wired to D2, other leg to GND
 
 bool lastButtonState = true;  // INPUT_PULLUP: unpressed = HIGH

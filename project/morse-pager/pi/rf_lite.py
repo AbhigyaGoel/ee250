@@ -1,3 +1,4 @@
+# AI-assisted development (Claude Code, Anthropic)
 """
 Lightweight Random Forest inference — no scikit-learn required.
 Loads the exported JSON model and runs predictions using only numpy.

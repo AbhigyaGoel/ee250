@@ -1,3 +1,4 @@
+# AI-assisted development (Claude Code, Anthropic)
 """
 Export trained RandomForest to a lightweight JSON format that can be
 loaded on the Pi without scikit-learn. Only needs numpy for inference.

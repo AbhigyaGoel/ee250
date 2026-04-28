@@ -1,3 +1,4 @@
+# AI-assisted development (Claude Code, Anthropic)
 """
 Train a Random Forest classifier on synthetic Morse code timing data.
 

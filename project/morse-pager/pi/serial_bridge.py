@@ -1,3 +1,4 @@
+# AI-assisted development (Claude Code, Anthropic)
 """
 Pi Serial Bridge — reads from Arduino Node A over USB serial (plain text format),
 publishes raw tap/gap events to the MQTT broker, and relays decoded messages

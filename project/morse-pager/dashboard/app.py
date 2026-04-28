@@ -1,3 +1,4 @@
+# AI-assisted development (Claude Code, Anthropic)
 """
 Flask-SocketIO Dashboard — subscribes to the MQTT broker and visualizes
 the Morse decoding process live. Three panels: tap waveform, confidence plot,

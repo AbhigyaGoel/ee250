@@ -1,6 +1,4 @@
 Morse Code IoT Pager: EE250 Final Project
-Abhigya Goel and Lucas Kim
-
 
 TEAM MEMBERS
 Abhigya Goel

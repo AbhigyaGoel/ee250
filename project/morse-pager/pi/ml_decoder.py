@@ -1,3 +1,4 @@
+# AI-assisted development (Claude Code, Anthropic)
 """
 Pi ML Decoder — subscribes to raw tap/gap events, runs Random Forest inference,
 decodes Morse characters, and publishes decoded results.
