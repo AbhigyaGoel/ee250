@@ -169,20 +169,19 @@ def setup_node_b_relay(mqtt_client: mqtt.Client, port_b_path: str, baud: int):
             return
 
         if "decoded" in topic:
-            # Decoded character from ml_decoder → send to Node B LCD
             char = data.get("char", "")
             if char:
+                print(f"[B] Relay: CHAR,{char}")
                 write_to_b(f"CHAR,{char}")
-            # Also send full message for display
             msg_so_far = data.get("message_so_far", "")
             if msg_so_far:
                 write_to_b(f"MSG,{msg_so_far}")
 
         elif "alert" in topic:
-            # RGB command from ml_decoder → send to Node B RGB LED
             r = data.get("r", 0)
             g = data.get("g", 0)
             b = data.get("b", 0)
+            print(f"[B] Relay: RGB,{r},{g},{b}")
             write_to_b(f"RGB,{r},{g},{b}")
 
     mqtt_client.on_message = on_message
