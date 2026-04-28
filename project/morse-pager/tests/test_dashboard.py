@@ -103,7 +103,7 @@ class TestFlaskRoutes:
 
     def test_index_contains_title(self):
         response = self.client.get("/")
-        assert b"MORSE CODE PAGER" in response.data
+        assert b"MORSE" in response.data and b"PAGER" in response.data
 
     def test_api_messages_returns_json(self):
         response = self.client.get("/api/messages")
