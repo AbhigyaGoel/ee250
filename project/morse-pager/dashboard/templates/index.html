@@ -3,435 +3,404 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Morse Code Pager</title>
+    <title>Morse Pager</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+        :root {
+            --bg: #050505;
+            --surface: #111;
+            --surface2: #191919;
+            --border: #222;
+            --text: #ccc;
+            --text2: #666;
+            --accent: #e8e8e8;
+            --green: #4ade80;
+            --red: #f87171;
+            --amber: #fbbf24;
+            --blue: #60a5fa;
+            --dim: #333;
+        }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { height: 100%; overflow: hidden; }
+        html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); }
         body {
-            font-family: 'Inter', system-ui, sans-serif;
-            background: #09090b;
-            color: #fafafa;
-            padding: 16px 20px;
+            font-family: 'Space Grotesk', sans-serif;
             display: flex;
             flex-direction: column;
+            padding: 14px 18px;
         }
 
-        /* ── Header ── */
-        .header {
+        /* Header */
+        header {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
+            gap: 16px;
+            margin-bottom: 14px;
             flex-shrink: 0;
         }
-        .header h1 {
-            font-size: 1.25em;
+        .logo {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.95em;
             font-weight: 700;
-            letter-spacing: -0.02em;
-            color: #fafafa;
+            color: var(--accent);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
         }
-        .header h1 span { color: #a78bfa; }
-        .status-bar {
+        .nodes {
             display: flex;
-            gap: 14px;
-            font-size: 0.75em;
-            color: #71717a;
+            gap: 10px;
+            font-size: 0.68em;
+            color: var(--text2);
+            margin-left: auto;
         }
-        .status-bar > span { display: flex; align-items: center; gap: 5px; }
-        .status-dot {
-            width: 7px; height: 7px;
-            border-radius: 50%;
-            background: #3f3f46;
+        .nodes span { display: flex; align-items: center; gap: 4px; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); }
+        .dot.on { background: var(--green); box-shadow: 0 0 8px #4ade8066; }
+        .dot.off { background: var(--red); }
+        .btn-reset {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65em;
+            padding: 4px 12px;
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text2);
+            border-radius: 4px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
         }
-        .status-online { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
-        .status-offline { background: #ef4444; }
+        .btn-reset:hover { border-color: var(--red); color: var(--red); }
 
-        /* ── Grid ── */
+        /* Grid */
         .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: 1fr 1fr;
-            gap: 12px;
             flex: 1;
             min-height: 0;
+            display: grid;
+            grid-template-columns: 3fr 2fr;
+            grid-template-rows: auto 1fr;
+            gap: 10px;
         }
 
-        /* ── Panel ── */
-        .panel {
-            background: #18181b;
-            border: 1px solid #27272a;
-            border-radius: 12px;
-            padding: 14px 16px;
+        /* Decoded output — spans full width */
+        .output {
+            grid-column: 1 / -1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-height: 52px;
+        }
+        .output-label {
+            font-size: 0.6em;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text2);
+            writing-mode: vertical-lr;
+            transform: rotate(180deg);
+        }
+        .output-text {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.4em;
+            font-weight: 700;
+            color: var(--accent);
+            flex: 1;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            direction: rtl;
+            text-align: left;
+        }
+
+        /* Card */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px 14px;
             display: flex;
             flex-direction: column;
             min-height: 0;
             overflow: hidden;
         }
-        .panel-label {
-            font-size: 0.7em;
-            font-weight: 600;
+        .card-head {
+            font-size: 0.6em;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: #71717a;
-            margin-bottom: 10px;
-            flex-shrink: 0;
-        }
-
-        /* ── Charts ── */
-        .chart-wrap {
-            flex: 1;
-            min-height: 0;
-            position: relative;
-        }
-        .chart-wrap canvas {
-            position: absolute;
-            inset: 0;
-            width: 100% !important;
-            height: 100% !important;
-        }
-
-        /* ── Decoded Message ── */
-        .decoded-message {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 1.5em;
-            font-weight: 700;
-            color: #a78bfa;
-            padding: 10px 14px;
-            background: #0f0f12;
-            border: 1px solid #27272a;
-            border-radius: 8px;
-            height: 56px;
-            overflow-y: auto;
-            word-wrap: break-word;
-            margin-bottom: 10px;
-            flex-shrink: 0;
-        }
-
-        /* ── Message Log ── */
-        .message-log {
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
-            font-size: 0.78em;
-        }
-        .message-log::-webkit-scrollbar { width: 4px; }
-        .message-log::-webkit-scrollbar-track { background: transparent; }
-        .message-log::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 2px; }
-
-        .message-log .entry {
-            padding: 5px 8px;
-            border-bottom: 1px solid #1e1e22;
-            display: flex;
-            align-items: baseline;
-            gap: 10px;
-        }
-        .message-log .entry:hover { background: #1c1c20; }
-        .entry .node {
-            font-family: 'JetBrains Mono', monospace;
-            color: #60a5fa;
-            font-size: 0.85em;
-            min-width: 24px;
-        }
-        .entry .char {
-            font-family: 'JetBrains Mono', monospace;
-            color: #a78bfa;
-            font-weight: 700;
-            font-size: 1.1em;
-            min-width: 16px;
-            text-align: center;
-        }
-        .entry .conf {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85em;
-            min-width: 44px;
-        }
-        .conf-high { color: #22c55e; }
-        .conf-med  { color: #eab308; }
-        .conf-low  { color: #ef4444; }
-        .entry .time {
-            color: #3f3f46;
-            margin-left: auto;
-            font-size: 0.8em;
-        }
-        .low-confidence { background: rgba(239, 68, 68, 0.06); }
-
-        /* ── Inject ── */
-        .inject-desc {
-            color: #52525b;
-            font-size: 0.75em;
+            letter-spacing: 0.1em;
+            color: var(--text2);
             margin-bottom: 8px;
-        }
-        .inject-form {
-            display: flex;
-            gap: 8px;
             flex-shrink: 0;
         }
-        .inject-form input {
-            flex: 1;
-            padding: 8px 12px;
-            background: #0f0f12;
-            border: 1px solid #27272a;
-            color: #fafafa;
-            border-radius: 8px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85em;
-            outline: none;
-            transition: border-color 0.15s;
-        }
-        .inject-form input:focus { border-color: #a78bfa; }
-        .inject-form button {
-            padding: 8px 18px;
-            background: #a78bfa;
-            color: #09090b;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.85em;
-            cursor: pointer;
-            transition: background 0.15s;
-        }
-        .inject-form button:hover { background: #8b5cf6; }
 
-        #injectLog {
-            margin-top: 10px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.75em;
-            color: #52525b;
+        /* Left column: stacked charts */
+        .charts {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-height: 0;
+        }
+        .chart-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 12px;
             flex: 1;
             min-height: 0;
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
+        .chart-card .card-head { margin-bottom: 6px; }
+        .chart-area { flex: 1; min-height: 0; position: relative; }
+        .chart-area canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
 
-        /* ── Legend ── */
         .legend {
             display: flex;
-            gap: 12px;
-            margin-top: 6px;
+            gap: 10px;
+            margin-top: 5px;
             flex-shrink: 0;
-            flex-wrap: wrap;
         }
-        .legend-item {
+        .legend span {
+            font-size: 0.58em;
+            color: var(--text2);
             display: flex;
             align-items: center;
-            gap: 4px;
-            font-size: 0.65em;
-            color: #71717a;
+            gap: 3px;
         }
-        .legend-swatch {
-            width: 10px; height: 10px;
-            border-radius: 2px;
+        .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 1px; }
+
+        /* Right column: log + inject */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-height: 0;
+        }
+
+        /* Log */
+        .log {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            font-size: 0.72em;
+        }
+        .log::-webkit-scrollbar { width: 3px; }
+        .log::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 2px; }
+        .log-row {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            padding: 3px 0;
+            border-bottom: 1px solid #151515;
+        }
+        .log-node { font-family: 'Space Mono', monospace; color: var(--text2); font-size: 0.9em; min-width: 14px; }
+        .log-char { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 1.15em; min-width: 14px; text-align: center; color: var(--accent); }
+        .log-conf { font-family: 'Space Mono', monospace; font-size: 0.85em; min-width: 32px; }
+        .cg { color: var(--green); }
+        .cy { color: var(--amber); }
+        .cr { color: var(--red); }
+        .log-time { color: var(--dim); font-size: 0.85em; margin-left: auto; }
+        .log-row.low { background: rgba(248,113,113,0.04); }
+
+        /* Inject */
+        .inject-row {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .inject-row input {
+            flex: 1;
+            padding: 7px 10px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 4px;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.78em;
+            outline: none;
+        }
+        .inject-row input:focus { border-color: var(--text2); }
+        .inject-row button {
+            padding: 7px 14px;
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.78em;
+            cursor: pointer;
+        }
+        .inject-row button:hover { background: #fff; }
+        #injectLog {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65em;
+            color: var(--dim);
+            margin-top: 6px;
+            max-height: 60px;
+            overflow-y: auto;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1><span>MORSE</span> PAGER</h1>
-        <div class="status-bar">
-            <span><span class="status-dot" id="statusA"></span>Node A</span>
-            <span><span class="status-dot" id="statusB"></span>Node B</span>
-            <span><span class="status-dot" id="statusBridge"></span>Bridge</span>
-            <span><span class="status-dot" id="statusDecoder"></span>Decoder</span>
+    <header>
+        <div class="logo">Morse Pager</div>
+        <button class="btn-reset" onclick="resetSession()">Reset</button>
+        <div class="nodes">
+            <span><span class="dot" id="statusA"></span>A</span>
+            <span><span class="dot" id="statusB"></span>B</span>
+            <span><span class="dot" id="statusBridge"></span>Bridge</span>
         </div>
-    </div>
+    </header>
 
     <div class="grid">
-        <div class="panel">
-            <div class="panel-label">Tap Waveform</div>
-            <div class="chart-wrap"><canvas id="waveformChart"></canvas></div>
-            <div class="legend">
-                <div class="legend-item"><div class="legend-swatch" style="background:#a78bfa"></div>Dot</div>
-                <div class="legend-item"><div class="legend-swatch" style="background:#60a5fa"></div>Dash</div>
-                <div class="legend-item"><div class="legend-swatch" style="background:#3f3f46"></div>Intra</div>
-                <div class="legend-item"><div class="legend-swatch" style="background:#eab308"></div>Inter</div>
-                <div class="legend-item"><div class="legend-swatch" style="background:#ef4444"></div>Word</div>
-            </div>
+        <!-- Decoded output bar -->
+        <div class="output">
+            <div class="output-label">OUT</div>
+            <div class="output-text" id="decodedMessage">...</div>
         </div>
 
-        <div class="panel">
-            <div class="panel-label">Confidence</div>
-            <div class="chart-wrap"><canvas id="confidenceChart"></canvas></div>
-        </div>
-
-        <div class="panel">
-            <div class="panel-label">Decoded Output</div>
-            <div class="decoded-message" id="decodedMessage">Waiting for input...</div>
-            <div class="panel-label" style="margin-top:4px">Event Log</div>
-            <div class="message-log" id="messageLog">
-                {% for msg in messages %}
-                <div class="entry {{ 'low-confidence' if msg.confidence < 0.7 }}">
-                    <span class="node">{{ msg.node }}</span>
-                    <span class="char">{{ msg.character }}</span>
-                    <span class="conf {% if msg.confidence >= 0.9 %}conf-high{% elif msg.confidence >= 0.7 %}conf-med{% else %}conf-low{% endif %}">{{ "%.0f"|format(msg.confidence * 100) }}%</span>
-                    <span class="time">{{ msg.timestamp }}</span>
+        <!-- Left: charts -->
+        <div class="charts">
+            <div class="chart-card">
+                <div class="card-head">Signal</div>
+                <div class="chart-area"><canvas id="waveformChart"></canvas></div>
+                <div class="legend">
+                    <span><i style="background:#e8e8e8"></i>Dot</span>
+                    <span><i style="background:#60a5fa"></i>Dash</span>
+                    <span><i style="background:#333"></i>Intra</span>
+                    <span><i style="background:#fbbf24"></i>Inter</span>
+                    <span><i style="background:#f87171"></i>Word</span>
                 </div>
-                {% endfor %}
+            </div>
+            <div class="chart-card">
+                <div class="card-head">Confidence</div>
+                <div class="chart-area"><canvas id="confidenceChart"></canvas></div>
             </div>
         </div>
 
-        <div class="panel">
-            <div class="panel-label">Manual Inject</div>
-            <div class="inject-desc">Type text to encode as Morse and publish to broker</div>
-            <div class="inject-form">
-                <input type="text" id="injectText" placeholder="Type message..." autocomplete="off">
-                <button onclick="injectMessage()">Send</button>
+        <!-- Right: log + inject -->
+        <div class="sidebar">
+            <div class="card" style="flex:1; min-height:0;">
+                <div class="card-head">Log</div>
+                <div class="log" id="messageLog">
+                    {% for msg in messages %}
+                    <div class="log-row {{ 'low' if msg.confidence < 0.7 }}">
+                        <span class="log-node">{{ msg.node }}</span>
+                        <span class="log-char">{{ msg.character }}</span>
+                        <span class="log-conf {% if msg.confidence >= 0.9 %}cg{% elif msg.confidence >= 0.7 %}cy{% else %}cr{% endif %}">{{ "%.0f"|format(msg.confidence * 100) }}%</span>
+                        <span class="log-time">{{ msg.timestamp }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
-            <div id="injectLog"></div>
+            <div class="card">
+                <div class="card-head">Inject</div>
+                <div class="inject-row">
+                    <input type="text" id="injectText" placeholder="message..." autocomplete="off">
+                    <button onclick="injectMessage()">Send</button>
+                </div>
+                <div id="injectLog"></div>
+            </div>
         </div>
     </div>
 
     <script>
         const socket = io();
-
-        const LABEL_COLORS = {
-            'dot': '#a78bfa',
-            'dash': '#60a5fa',
-            'intra_letter_gap': '#3f3f46',
-            'inter_letter_gap': '#eab308',
-            'word_gap': '#ef4444'
+        const COLORS = {
+            dot: '#e8e8e8', dash: '#60a5fa',
+            intra_letter_gap: '#333', inter_letter_gap: '#fbbf24', word_gap: '#f87171'
         };
+        const MAX_PTS = 50;
+        const cf = { family: "'Space Grotesk', sans-serif", size: 10 };
 
-        const MAX_POINTS = 50;
-
-        const chartFont = { family: "'Inter', sans-serif", size: 11 };
-
-        const waveformChart = new Chart(document.getElementById('waveformChart').getContext('2d'), {
+        const wfChart = new Chart(document.getElementById('waveformChart').getContext('2d'), {
             type: 'bar',
-            data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderRadius: 3, borderSkipped: false }] },
+            data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderRadius: 2, borderSkipped: false, barPercentage: 0.85 }] },
             options: {
-                responsive: true, maintainAspectRatio: false,
-                animation: { duration: 120 },
+                responsive: true, maintainAspectRatio: false, animation: { duration: 100 },
                 scales: {
                     x: { display: false },
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: '#1e1e22', drawTicks: false },
-                        border: { display: false },
-                        ticks: { color: '#52525b', font: chartFont, padding: 8,
-                            callback: function(v) { return v + 'ms'; }
-                        }
-                    }
+                    y: { beginAtZero: true, grid: { color: '#181818', drawTicks: false }, border: { display: false },
+                        ticks: { color: '#444', font: cf, padding: 6, callback: function(v){return v+'ms';} } }
                 },
                 plugins: { legend: { display: false }, tooltip: { enabled: false } }
             }
         });
 
-        const confidenceChart = new Chart(document.getElementById('confidenceChart').getContext('2d'), {
+        const cfChart = new Chart(document.getElementById('confidenceChart').getContext('2d'), {
             type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    data: [],
-                    borderColor: '#a78bfa',
-                    borderWidth: 2,
-                    backgroundColor: 'rgba(167,139,250,0.08)',
-                    fill: true,
-                    tension: 0.35,
-                    pointRadius: 0,
-                    pointHitRadius: 8
-                }]
-            },
+            data: { labels: [], datasets: [{
+                data: [], borderColor: '#e8e8e8', borderWidth: 1.5,
+                backgroundColor: 'rgba(232,232,232,0.04)', fill: true, tension: 0.3, pointRadius: 0
+            }] },
             options: {
-                responsive: true, maintainAspectRatio: false,
-                animation: { duration: 120 },
+                responsive: true, maintainAspectRatio: false, animation: { duration: 100 },
                 scales: {
                     x: { display: false },
-                    y: {
-                        min: 0, max: 1,
-                        grid: { color: '#1e1e22', drawTicks: false },
-                        border: { display: false },
-                        ticks: {
-                            color: '#52525b', font: chartFont, padding: 8,
-                            callback: function(v) { return (v * 100) + '%'; },
-                            stepSize: 0.25
-                        }
-                    }
+                    y: { min: 0, max: 1, grid: { color: '#181818', drawTicks: false }, border: { display: false },
+                        ticks: { color: '#444', font: cf, padding: 6, stepSize: 0.25,
+                            callback: function(v){return (v*100)+'%';} } }
                 },
                 plugins: { legend: { display: false }, tooltip: { enabled: false } }
             }
         });
 
-        let eventCount = 0;
+        let n = 0;
 
-        function confClass(c) {
-            if (c >= 0.9) return 'conf-high';
-            if (c >= 0.7) return 'conf-med';
-            return 'conf-low';
-        }
+        function cc(v) { return v >= 0.9 ? 'cg' : v >= 0.7 ? 'cy' : 'cr'; }
 
-        function createLogEntry(nodeText, charText, confValue, timeText, isLowConf) {
-            const entry = document.createElement('div');
-            entry.className = 'entry' + (isLowConf ? ' low-confidence' : '');
+        socket.on('tap_event', function(d) {
+            n++;
+            const w = wfChart.data;
+            w.labels.push(n); w.datasets[0].data.push(d.duration_ms);
+            w.datasets[0].backgroundColor.push(COLORS[d.label] || '#333');
+            if (w.labels.length > MAX_PTS) { w.labels.shift(); w.datasets[0].data.shift(); w.datasets[0].backgroundColor.shift(); }
+            wfChart.update();
 
-            const nodeSpan = document.createElement('span');
-            nodeSpan.className = 'node';
-            nodeSpan.textContent = nodeText;
-
-            const charSpan = document.createElement('span');
-            charSpan.className = 'char';
-            charSpan.textContent = charText === ' ' ? '\u2423' : charText;
-
-            const confSpan = document.createElement('span');
-            confSpan.className = 'conf ' + confClass(confValue);
-            confSpan.textContent = Math.round(confValue * 100) + '%';
-
-            const timeSpan = document.createElement('span');
-            timeSpan.className = 'time';
-            timeSpan.textContent = timeText;
-
-            entry.appendChild(nodeSpan);
-            entry.appendChild(charSpan);
-            entry.appendChild(confSpan);
-            entry.appendChild(timeSpan);
-            return entry;
-        }
-
-        socket.on('tap_event', function(data) {
-            eventCount++;
-            const wf = waveformChart.data;
-            wf.labels.push(eventCount);
-            wf.datasets[0].data.push(data.duration_ms);
-            wf.datasets[0].backgroundColor.push(LABEL_COLORS[data.label] || '#3f3f46');
-            if (wf.labels.length > MAX_POINTS) {
-                wf.labels.shift(); wf.datasets[0].data.shift(); wf.datasets[0].backgroundColor.shift();
-            }
-            waveformChart.update();
-
-            const cf = confidenceChart.data;
-            cf.labels.push(eventCount);
-            cf.datasets[0].data.push(data.confidence);
-            if (cf.labels.length > MAX_POINTS) {
-                cf.labels.shift(); cf.datasets[0].data.shift();
-            }
-            confidenceChart.update();
+            const c = cfChart.data;
+            c.labels.push(n); c.datasets[0].data.push(d.confidence);
+            if (c.labels.length > MAX_PTS) { c.labels.shift(); c.datasets[0].data.shift(); }
+            cfChart.update();
         });
 
-        socket.on('decoded_char', function(data) {
-            document.getElementById('decodedMessage').textContent = data.message_so_far || '';
-            const log = document.getElementById('messageLog');
-            log.appendChild(createLogEntry(
-                data.node, data.char, data.confidence,
-                new Date().toLocaleTimeString(), data.confidence < 0.7
-            ));
+        socket.on('decoded_char', function(d) {
+            document.getElementById('decodedMessage').textContent = d.message_so_far || '';
+            var log = document.getElementById('messageLog');
+            var row = document.createElement('div');
+            row.className = 'log-row' + (d.confidence < 0.7 ? ' low' : '');
+
+            var s1 = document.createElement('span'); s1.className = 'log-node'; s1.textContent = d.node;
+            var s2 = document.createElement('span'); s2.className = 'log-char'; s2.textContent = d.char === ' ' ? '\u2423' : d.char;
+            var s3 = document.createElement('span'); s3.className = 'log-conf ' + cc(d.confidence); s3.textContent = Math.round(d.confidence*100)+'%';
+            var s4 = document.createElement('span'); s4.className = 'log-time'; s4.textContent = new Date().toLocaleTimeString();
+
+            row.appendChild(s1); row.appendChild(s2); row.appendChild(s3); row.appendChild(s4);
+            log.appendChild(row);
             log.scrollTop = log.scrollHeight;
         });
 
-        socket.on('node_status', function(data) {
-            if (data.node) {
-                var el = document.getElementById('status' + data.node);
-                if (el) el.className = 'status-dot ' + (data.state === 'online' ? 'status-online' : 'status-offline');
-            }
+        socket.on('node_status', function(d) {
+            if (d.node) { var el = document.getElementById('status'+d.node);
+                if (el) el.className = 'dot ' + (d.state==='online' ? 'on' : 'off'); }
         });
 
-        socket.on('inject_sent', function(data) {
+        socket.on('session_reset', function() {
+            document.getElementById('decodedMessage').textContent = '...';
+            document.getElementById('messageLog').textContent = '';
+            wfChart.data.labels = []; wfChart.data.datasets[0].data = []; wfChart.data.datasets[0].backgroundColor = []; wfChart.update();
+            cfChart.data.labels = []; cfChart.data.datasets[0].data = []; cfChart.update();
+            n = 0;
+        });
+
+        socket.on('inject_sent', function(d) {
             var log = document.getElementById('injectLog');
             var line = document.createElement('div');
-            line.textContent = new Date().toLocaleTimeString() + '  ' + data.text + ' \u2192 ' + data.morse;
+            line.textContent = d.text + ' \u2192 ' + d.morse;
             log.appendChild(line);
-            log.scrollTop = log.scrollHeight;
         });
 
         function injectMessage() {
@@ -441,14 +410,10 @@
             socket.emit('inject_message', { text: text, node: 'dashboard' });
             input.value = '';
         }
+        function resetSession() { socket.emit('reset_session'); }
 
-        document.getElementById('injectText').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') injectMessage();
-        });
-
-        ['statusA', 'statusB', 'statusBridge', 'statusDecoder'].forEach(function(id) {
-            document.getElementById(id).className = 'status-dot status-offline';
-        });
+        document.getElementById('injectText').addEventListener('keypress', function(e) { if (e.key==='Enter') injectMessage(); });
+        ['statusA','statusB','statusBridge'].forEach(function(id) { document.getElementById(id).className = 'dot off'; });
     </script>
 </body>
 </html>

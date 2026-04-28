@@ -109,10 +109,17 @@ def main():
         if rc == 0:
             print(f"Connected to broker. Subscribing to {TOPIC_RAW}")
             client.subscribe(TOPIC_RAW)
+            client.subscribe("pager/control/reset")
         else:
             print(f"Connection failed with code {rc}")
 
     def on_message(_client, _userdata, msg):
+        # Handle reset command
+        if "control/reset" in msg.topic:
+            sessions.clear()
+            print("[RESET] All sessions cleared")
+            return
+
         try:
             data = json.loads(msg.payload.decode())
         except json.JSONDecodeError:

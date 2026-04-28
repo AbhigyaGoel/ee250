@@ -131,6 +131,15 @@ def handle_connect():
     print("Dashboard client connected")
 
 
+@socketio.on("reset_session")
+def handle_reset():
+    """Reset decoder session and clear dashboard state."""
+    if mqtt_client is not None:
+        mqtt_client.publish("pager/control/reset", json.dumps({"action": "reset"}))
+    socketio.emit("session_reset")
+    print("[reset] Session reset requested")
+
+
 @socketio.on("inject_message")
 def handle_inject(data):
     """Manual message inject — encode text to Morse and publish to broker."""
