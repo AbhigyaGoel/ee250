@@ -27,8 +27,9 @@ TOPIC_DECODED = "pager/morse/decoded/{node_id}"
 TOPIC_ALERT = "pager/alert/{node_id}"
 
 MAX_MORSE_LEN = 6       # Longest valid Morse sequence
-GAP_INTER_MS = 400.0    # Gaps >= this are inter-letter boundaries
-GAP_WORD_MS = 1200.0    # Gaps >= this are word boundaries
+WARMUP_EVENTS = 6       # Use fixed thresholds until this many events seen
+GAP_INTER_MS = 400.0    # Fixed fallback: gaps >= this are inter-letter
+GAP_WORD_MS = 1200.0    # Fixed fallback: gaps >= this are word boundaries
 
 
 class SessionState:
@@ -70,14 +71,8 @@ class SessionState:
             return 0.0
         return self.tap_sum / self.tap_count
 
-    def classify_gap(self, duration_ms):
-        """Classify a gap using fixed thresholds.
-
-        Fixed thresholds are predictable and learnable for demo:
-        - < 400ms → intra-letter (keep building the letter)
-        - 400ms–1200ms → inter-letter (flush letter)
-        - >= 1200ms → word gap (flush letter + space)
-        """
+    def classify_gap_fallback(self, duration_ms):
+        """Fixed threshold fallback for warmup period before ML stabilizes."""
         if duration_ms >= GAP_WORD_MS:
             return "word_gap", 4
         elif duration_ms >= GAP_INTER_MS:
@@ -136,15 +131,17 @@ def main():
         session = get_session(node_id)
         features = session.compute_features(duration_ms, is_tap)
 
-        if is_tap:
-            # ML model for taps: dot vs dash
-            label_idx = clf.predict(features)[0]
-            proba = clf.predict_proba(features)[0]
-            confidence = float(proba[label_idx])
-            label_name = LABEL_NAMES[label_idx]
-        else:
-            # Adaptive thresholds for gaps: compare gap to other gaps
-            label_name, label_idx = session.classify_gap(duration_ms)
+        # ML model classifies all events (taps and gaps).
+        # During warmup (first few events), session mean is unstable so
+        # the model's normalized features are unreliable for gaps — use
+        # fixed thresholds as fallback. After warmup, trust the model.
+        label_idx = clf.predict(features)[0]
+        proba = clf.predict_proba(features)[0]
+        confidence = float(proba[label_idx])
+        label_name = LABEL_NAMES[label_idx]
+
+        if not is_tap and session.running_count <= WARMUP_EVENTS:
+            label_name, label_idx = session.classify_gap_fallback(duration_ms)
             confidence = 1.0
 
         # Debug: show raw classification

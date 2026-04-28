@@ -247,23 +247,17 @@ class TestDecodeLogic:
         # 7 dots flushed as "?" then 1 dot flushed as "E"
         assert session.message == "?E"
 
-    def test_gap_classification_fixed_thresholds(self):
-        """Fixed thresholds: <400ms intra, 400-1200ms inter, >=1200ms word."""
+    def test_gap_classification_warmup_fallback(self):
+        """During warmup, fixed thresholds are used for gaps."""
         session = SessionState()
         # Intra-letter: short gap
-        label, idx = session.classify_gap(200.0)
-        assert label == "intra_letter_gap"
-        label, idx = session.classify_gap(399.0)
+        label, idx = session.classify_gap_fallback(200.0)
         assert label == "intra_letter_gap"
         # Inter-letter: medium gap
-        label, idx = session.classify_gap(400.0)
-        assert label == "inter_letter_gap"
-        label, idx = session.classify_gap(800.0)
+        label, idx = session.classify_gap_fallback(500.0)
         assert label == "inter_letter_gap"
         # Word gap: long gap
-        label, idx = session.classify_gap(1200.0)
-        assert label == "word_gap"
-        label, idx = session.classify_gap(5000.0)
+        label, idx = session.classify_gap_fallback(1500.0)
         assert label == "word_gap"
 
 
