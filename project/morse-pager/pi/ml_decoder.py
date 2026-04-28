@@ -183,14 +183,22 @@ def main():
             session.message += decoded_char
             session.letter_buffer = []
 
-        # Publish RGB alert to Node B
-        if label_name in ("dot", "dash"):
-            is_sos = session.message.rstrip().endswith("SOS")
-            rgb_cmd = {"r": 1, "g": 0, "b": 0} if is_sos else {"r": 0, "g": 1, "b": 0}
-            mqtt_client.publish(
-                TOPIC_ALERT.format(node_id="B"),
-                json.dumps(rgb_cmd),
-            )
+        # Send Morse playback + SOS alert to Node B
+        if decoded_char is not None and decoded_char != " " and decoded_char != "?":
+            # Look up the Morse pattern for the decoded character
+            from morse_lookup import encode_char
+            pattern = encode_char(decoded_char)
+            if pattern:
+                mqtt_client.publish(
+                    TOPIC_ALERT.format(node_id="B"),
+                    json.dumps({"cmd": "tone", "pattern": pattern, "char": decoded_char}),
+                )
+            # Check for SOS
+            if session.message.rstrip().endswith("SOS"):
+                mqtt_client.publish(
+                    TOPIC_ALERT.format(node_id="B"),
+                    json.dumps({"cmd": "sos"}),
+                )
 
         # Publish classified event
         event_result = {

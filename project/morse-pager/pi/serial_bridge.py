@@ -178,11 +178,14 @@ def setup_node_b_relay(mqtt_client: mqtt.Client, port_b_path: str, baud: int):
                 write_to_b(f"MSG,{msg_so_far}")
 
         elif "alert" in topic:
-            r = data.get("r", 0)
-            g = data.get("g", 0)
-            b = data.get("b", 0)
-            print(f"[B] Relay: RGB,{r},{g},{b}")
-            write_to_b(f"RGB,{r},{g},{b}")
+            cmd = data.get("cmd", "")
+            if cmd == "tone":
+                pattern = data.get("pattern", "")
+                print(f"[B] Relay: TONE,{pattern}")
+                write_to_b(f"TONE,{pattern}")
+            elif cmd == "sos":
+                print(f"[B] Relay: SOS")
+                write_to_b("SOS")
 
     mqtt_client.on_message = on_message
     mqtt_client.subscribe(TOPIC_DECODED)

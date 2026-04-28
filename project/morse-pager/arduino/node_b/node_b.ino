@@ -1,57 +1,44 @@
 /*
  * Node B — Morse Code Receiver Terminal
  *
- * Hardware: Arduino Uno R3 + 16x2 LCD shield (stacked) + RGB LED + 2 extra LEDs
- * No buttons, no buzzer on this node. Receive-only.
+ * Hardware: Arduino Uno R3 + 16x2 LCD shield (stacked) + buzzer + 2 LEDs
+ * No buttons on this node. Receive-only.
  *
  * LCD shield occupies D4–D10 and A0.
  * Remaining free digital pins: D2, D3, D11, D12, D13.
  *
  * Receives commands from the Pi over USB serial:
- *   CHAR,<character>        — display decoded character on LCD
- *   RGB,<r>,<g>,<b>         — set RGB LED color (0 or 1 per channel, digital)
+ *   CHAR,<character>        — display character on LCD + blink LEDs
+ *   TONE,<morse_pattern>    — play Morse pattern on buzzer (e.g. "...", "---")
  *   MSG,<text>              — display full message on LCD line 2
+ *   SOS                     — play SOS alarm (distinct warbling tone)
  *
  * Wiring:
  *   LCD shield:  stacked (D4–D10)
- *   RGB LED R:   D11 (with 220 ohm resistor)
- *   RGB LED G:   D12 (with 220 ohm resistor)
- *   RGB LED B:   D13 (with 220 ohm resistor)
- *   RGB cathode: GND (common cathode) — if common anode, set COMMON_ANODE true
- *   Extra LED 1: D2 (with resistor)
- *   Extra LED 2: D3 (with resistor)
+ *   Buzzer +     D13
+ *   Buzzer -     GND
+ *   LED 1:       D2 (with resistor) — blinks on dot
+ *   LED 2:       D3 (with resistor) — blinks on dash
  */
 
 #include <LiquidCrystal.h>
 
-// LCD shield pin configuration (standard DFRobot/SainSmart 16x2 shield)
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 
-// --- Configuration ---
-// Set to true if your RGB LED is common ANODE (most kit RGB LEDs are)
-const bool COMMON_ANODE = true;
+const int BUZZER_PIN = 13;
+const int LED_DOT_PIN = 2;
+const int LED_DASH_PIN = 3;
 
-// --- Pin Configuration ---
-const int RGB_R_PIN = 11;
-const int RGB_G_PIN = 12;
-const int RGB_B_PIN = 13;
-const int LED1_PIN = 2;
-const int LED2_PIN = 3;
+const int TONE_FREQ = 800;
+const int DOT_MS = 80;
+const int DASH_MS = 240;
+const int SYMBOL_GAP_MS = 80;
 
-// --- Display state ---
 char displayLine[17] = "";
 int displayPos = 0;
 
-// --- Serial input buffer ---
 char serialBuf[128];
 int serialBufPos = 0;
-
-// --- LED blink state ---
-unsigned long lastBlinkTime = 0;
-bool blinkState = false;
-bool blinkActive = false;
-const unsigned long BLINK_DURATION = 150;
-int blinksRemaining = 0;
 
 void setup() {
     Serial.begin(115200);
@@ -60,39 +47,30 @@ void setup() {
     lcd.begin(16, 2);
     lcd.clear();
 
-    pinMode(RGB_R_PIN, OUTPUT);
-    pinMode(RGB_G_PIN, OUTPUT);
-    pinMode(RGB_B_PIN, OUTPUT);
-    pinMode(LED1_PIN, OUTPUT);
-    pinMode(LED2_PIN, OUTPUT);
+    pinMode(BUZZER_PIN, OUTPUT);
+    pinMode(LED_DOT_PIN, OUTPUT);
+    pinMode(LED_DASH_PIN, OUTPUT);
 
-    // Startup test: cycle through all LEDs so you can verify hardware
+    // Startup test
     lcd.setCursor(0, 0);
-    lcd.print("LED Test...");
+    lcd.print("LED/Buzz Test...");
 
-    setRGB(1, 0, 0); delay(300);  // Red
-    setRGB(0, 1, 0); delay(300);  // Green
-    setRGB(0, 0, 1); delay(300);  // Blue
-    setRGB(1, 1, 1); delay(300);  // White
-    setRGB(0, 0, 0);              // Off
-
-    digitalWrite(LED1_PIN, HIGH); delay(200);
-    digitalWrite(LED1_PIN, LOW);
-    digitalWrite(LED2_PIN, HIGH); delay(200);
-    digitalWrite(LED2_PIN, LOW);
+    digitalWrite(LED_DOT_PIN, HIGH); delay(200);
+    digitalWrite(LED_DOT_PIN, LOW);
+    digitalWrite(LED_DASH_PIN, HIGH); delay(200);
+    digitalWrite(LED_DASH_PIN, LOW);
+    tone(BUZZER_PIN, TONE_FREQ, 150); delay(200);
+    tone(BUZZER_PIN, TONE_FREQ + 200, 150); delay(200);
 
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Morse Pager [B]");
     lcd.setCursor(0, 1);
     lcd.print("Waiting...");
-
-    setRGB(0, 1, 0);  // Green = ready
 }
 
 void loop() {
     handleSerialInput();
-    handleBlink();
 }
 
 void handleSerialInput() {
@@ -112,12 +90,14 @@ void processCommand(const char* cmd) {
     if (strncmp(cmd, "CHAR,", 5) == 0) {
         char ch = cmd[5];
         appendChar(ch);
-        triggerBlink(2);
 
-    } else if (strncmp(cmd, "RGB,", 4) == 0) {
-        int r = 0, g = 0, b = 0;
-        sscanf(cmd + 4, "%d,%d,%d", &r, &g, &b);
-        setRGB(r, g, b);
+    } else if (strncmp(cmd, "TONE,", 5) == 0) {
+        // Play Morse pattern: dots and dashes as audio + LEDs
+        const char* pattern = cmd + 5;
+        playMorsePattern(pattern);
+
+    } else if (strcmp(cmd, "SOS") == 0) {
+        playSosAlarm();
 
     } else if (strncmp(cmd, "MSG,", 4) == 0) {
         const char* text = cmd + 4;
@@ -141,6 +121,40 @@ void processCommand(const char* cmd) {
     }
 }
 
+void playMorsePattern(const char* pattern) {
+    for (int i = 0; pattern[i] != '\0'; i++) {
+        if (pattern[i] == '.') {
+            digitalWrite(LED_DOT_PIN, HIGH);
+            tone(BUZZER_PIN, TONE_FREQ);
+            delay(DOT_MS);
+            noTone(BUZZER_PIN);
+            digitalWrite(LED_DOT_PIN, LOW);
+        } else if (pattern[i] == '-') {
+            digitalWrite(LED_DASH_PIN, HIGH);
+            tone(BUZZER_PIN, TONE_FREQ);
+            delay(DASH_MS);
+            noTone(BUZZER_PIN);
+            digitalWrite(LED_DASH_PIN, LOW);
+        }
+        delay(SYMBOL_GAP_MS);
+    }
+}
+
+void playSosAlarm() {
+    // Warbling alarm tone for SOS detection
+    for (int i = 0; i < 3; i++) {
+        tone(BUZZER_PIN, 1000);
+        digitalWrite(LED_DOT_PIN, HIGH);
+        digitalWrite(LED_DASH_PIN, HIGH);
+        delay(150);
+        tone(BUZZER_PIN, 1400);
+        digitalWrite(LED_DOT_PIN, LOW);
+        digitalWrite(LED_DASH_PIN, LOW);
+        delay(150);
+    }
+    noTone(BUZZER_PIN);
+}
+
 void appendChar(char ch) {
     if (displayPos >= 16) {
         for (int i = 0; i < 15; i++) {
@@ -156,46 +170,4 @@ void appendChar(char ch) {
     lcd.print("                ");
     lcd.setCursor(0, 1);
     lcd.print(displayLine);
-}
-
-void triggerBlink(int count) {
-    blinksRemaining = count * 2;
-    blinkActive = true;
-    blinkState = true;
-    lastBlinkTime = millis();
-    digitalWrite(LED1_PIN, HIGH);
-    digitalWrite(LED2_PIN, HIGH);
-}
-
-void handleBlink() {
-    if (!blinkActive) return;
-
-    unsigned long now = millis();
-    if (now - lastBlinkTime >= BLINK_DURATION) {
-        lastBlinkTime = now;
-        blinkState = !blinkState;
-        digitalWrite(LED1_PIN, blinkState ? HIGH : LOW);
-        digitalWrite(LED2_PIN, blinkState ? HIGH : LOW);
-
-        blinksRemaining--;
-        if (blinksRemaining <= 0) {
-            blinkActive = false;
-            digitalWrite(LED1_PIN, LOW);
-            digitalWrite(LED2_PIN, LOW);
-        }
-    }
-}
-
-void setRGB(int r, int g, int b) {
-    if (COMMON_ANODE) {
-        // Common anode: HIGH = off, LOW = on
-        digitalWrite(RGB_R_PIN, r ? LOW : HIGH);
-        digitalWrite(RGB_G_PIN, g ? LOW : HIGH);
-        digitalWrite(RGB_B_PIN, b ? LOW : HIGH);
-    } else {
-        // Common cathode: HIGH = on, LOW = off
-        digitalWrite(RGB_R_PIN, r ? HIGH : LOW);
-        digitalWrite(RGB_G_PIN, g ? HIGH : LOW);
-        digitalWrite(RGB_B_PIN, b ? HIGH : LOW);
-    }
 }
