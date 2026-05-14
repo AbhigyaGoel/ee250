@@ -29,6 +29,10 @@ htmlcov/
 *.db
 *.sqlite3
 
+# Generated training / model files
+training_data.csv
+rf_forest.json
+
 # OS
 .DS_Store
 Thumbs.db
